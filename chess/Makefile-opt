@@ -1,0 +1,90 @@
+ARCH="corei7"
+REVISION=
+CXXFLAGS = -O3 -g -pipe -march="$(ARCH)" -std=gnu++0x -Wall -flto -fwhole-program -pthread -static $(REVISION) -m64 $(EXTRA_CPPFLAGS)
+CFLAGS = -O3 -g -pipe -march="$(ARCH)" -Wall -flto -fwhole-program -pthread -static $(EXTRA_CPPFLAGS)
+#CXXFLAGS = -O0 -g -pipe -std=gnu++0x
+
+CXX = g++
+CC = gcc
+
+all: chess-use bookgen-use
+
+sqlite/sqlite3.o: sqlite/sqlite3.c
+	$(CC) $(CFLAGS) -DSQLITE_OMIT_LOAD_EXTENSION -pthread -static -c -o $@ $<
+
+tables.cpp: tables_gen.cpp
+	$(CXX) -m64 tables_gen.cpp -o tables_gen
+	./tables_gen > tables.cpp
+	rm tables_gen
+
+UTIL_SOURCE_FILES = \
+	util/logger.cpp \
+	util/mutex_unix.cpp \
+	util/platform.cpp \
+	util/string.cpp \
+	util/thread.cpp \
+	util/time.cpp
+
+GENERIC_SOURCE_FILES = \
+	calc.cpp \
+	config.cpp \
+	context.cpp \
+	detect_check.cpp \
+	endgame.cpp \
+	eval.cpp \
+	eval_values.cpp \
+	fen.cpp \
+	hash.cpp \
+	history.cpp \
+	magic.cpp \
+	moves.cpp \
+	pawn_structure_hash_table.cpp \
+	pgn.cpp \
+	phased_move_generator.cpp \
+	position.cpp \
+	pvlist.cpp \
+	pv_move_picker.cpp \
+	random.cpp \
+	util.cpp \
+	score.cpp \
+	see.cpp \
+	seen_positions.cpp \
+	selftest.cpp \
+	simple_book.cpp \
+	statistics.cpp \
+	tables.cpp \
+	zobrist.cpp \
+
+CHESS_SOURCE_FILES = $(UTIL_SOURCE_FILES) $(GENERIC_SOURCE_FILES) \
+	chess.cpp \
+	epd.cpp \
+	state_base.cpp \
+	time_calculation.cpp \
+	tweak.cpp \
+	xboard.cpp \
+	uci/info.cpp \
+	uci/minimalistic_uci_protocol.cpp \
+	uci/octochess_impl.cpp \
+	uci/runner.cpp \
+	uci/uci_time_calculation.cpp \
+
+BOOKGEN_SOURCE_FILES = $(UTIL_SOURCE_FILES) $(GENERIC_SOURCE_FILES) \
+	book.cpp \
+	bookgen.cpp \
+	sqlite/sqlite3.o \
+	sqlite/sqlite3_wrapper.cpp
+
+chess-gen: *.cpp *.hpp sqlite/sqlite3.o tables.cpp
+	$(CXX) $(CXXFLAGS) -fprofile-generate -o $@ $(CHESS_SOURCE_FILES)
+	./chess-gen --moves 1 --depth 18 auto
+	rm -f *.o uci/*.o
+
+chess-use: chess-gen
+	$(CXX) $(CXXFLAGS) -fprofile-use -fprofile-correction -o $@ $(CHESS_SOURCE_FILES)
+
+bookgen-use: chess-gen
+	$(CXX) $(CXXFLAGS) -fprofile-use -fprofile-correction -o $@ $(BOOKGEN_SOURCE_FILES)
+
+clean:
+	rm -f chess-gen
+	rm -f *.o uci/*.o sqlite/*.o util/*.o

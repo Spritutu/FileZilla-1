@@ -1,0 +1,15 @@
+#! /bin/sh
+
+export SCRIPTS="$PREFIX/scripts"
+export CLIENTSCRIPTS="$PREFIX/clientscripts"
+export DATADIR="$PREFIX/data"
+export WORKDIR="$PREFIX/../work"
+
+export CONFDIR="$PREFIX/config"
+export KEYFILE="$CONFDIR/key"
+
+export CVSDIR="$PREFIX/../cvs"
+export PATCHDIR="$PREFIX/../patches"
+
+export WWWDIR="/var/www/nightlies"
+

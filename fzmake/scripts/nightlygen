@@ -1,0 +1,260 @@
+#! /bin/bash
+
+. /etc/profile
+
+if [ -e "$HOME/.profile" ]; then
+  . "$HOME/.profile"
+fi
+
+CONFDIR=
+
+STRIP=
+UPDATE=true
+
+while [ -n "$1" ]; do
+  case $1 in
+    -[cC])
+      if [ -z "$2" ]; then
+        echo "-c expects a configuration dir as argument"
+        exit 1
+      fi
+      CONFDIR=$2
+      shift 2
+    ;;
+    --nostrip)
+      STRIP=false
+      shift 1
+    ;;
+    --strip=false)
+      STRIP=false
+      shift 1
+    ;;
+    --strip=true)
+      shift 1
+    ;;
+    --strip=*)
+      echo "Invalid argument to --strip"
+      exit 1
+    ;;
+    --noupdate)
+      UPDATE=false
+      shift 1
+    ;;
+    --update=false)
+      UPDATE=false
+      shift 1
+    ;;
+    --update=true)
+      UPDATE=true
+      shift 1
+    ;;
+    --update=*)
+      echo "Invalid argument to --update"
+      exit 1
+    ;;
+    *)
+      echo "Unknown option: $1"
+      exit 1
+    ;;
+  esac
+done
+
+init()
+{
+  if [ -n "$0" -a "${0:0:1}" = "/" ]; then
+    local dir="${0%/*}"
+  else
+    local dir="`pwd`/${0%/*}"
+  fi
+  if [ -z "$CONFDIR" ]; then
+    CONFDIR=$dir/../config
+  else
+    if [ "${CONFDIR:0:1}" != "/" ]; then
+      CONFDIR="`pwd`/$CONFDIR"
+    fi
+  fi
+  if [ ! -f "$CONFDIR/config" ]; then
+    echo "Can't find master config."
+    echo "  pwd: `pwd`"
+    echo "  \$0: $0"
+    echo "  Configuration directory: $CONFDIR"
+    echo "Aborting."
+    exit 1
+  fi
+  cd "$dir/.."
+  export PREFIX=`pwd`
+  echo "Setting prefix to $PREFIX"
+  cd "$dir"
+  return 0
+}
+
+init || exit 1
+
+. "$CONFDIR/config"
+. log.sh
+. updatecvs.sh
+. readfile.sh
+. readhosts
+. readpackages
+. buildspawn.sh
+. makedist.sh
+. filter.sh
+. prebuild.sh
+. postbuild.sh
+
+echo "#! /bin/sh" > "$PREFIX/clientscripts/parameters"
+chmod +x "$PREFIX/clientscripts/parameters"
+echo "export STRIP=$STRIP" >> "$PREFIX/clientscripts/parameters"
+
+clean_files()
+{
+  if [ -d "$WORKDIR" ]; then
+    cd "$WORKDIR" #To get out of a subdir
+    rm -rf "$WORKDIR/FileZilla3"
+    rm -rf "$WORKDIR/clientscripts"
+    rm -f "$WORKDIR/clientscripts.tar.bz2"
+  fi
+}
+
+buildfailure()
+{
+  touch "$OUTPUTDIR/failed"
+  [ -f "$OUTPUTDIR/running" ] && rm "$OUTPUTDIR/running"
+
+  logprint "Performing cleanup"
+  clean_files
+
+  $SCRIPTS/clean.sh >> $LOG 2>&1
+
+  return 1
+}
+
+applypatch()
+{
+  local PATCH=$1
+  local PACKAGE=$2
+
+  logprint "Applying $PATCH to $PACKAGE"
+  cd $WORKDIR/source/$PACKAGE
+  if patch -p0 -i $PATCHDIR/$PATCH -r - --dry-run >> $LOG 2>&1; then
+    patch -p0 -i $PATCHDIR/$PATCH -r - >> /dev/null 2>&1
+  else
+    logprint "$PATCH does not apply, skipping..."
+  fi
+}
+
+applypatches()
+{
+  if ! [ -d "$PATCHDIR" ]; then
+    logprint "Patchdir does not exist"
+    return;
+  fi
+  logprint "Applying patches"
+  cd "$PATCHDIR"
+  local PATCHES=`find . -name "*.patch"`
+  for i in $PATCHES; do
+    local PATCH=${i#./}
+    local PACKAGE=${PATCH%%/*}
+    applypatch $PATCH $PACKAGE
+  done
+}
+
+export DATE=`date "+%Y-%m-%d"`
+export OUTPUTDIR="$WWWDIR/$DATE"
+export LOG="$OUTPUTDIR/build.log"
+
+rm -rf "$OUTPUTDIR"
+mkdir -p "$OUTPUTDIR" || buildfailure || exit 1
+
+ln -snf "$OUTPUTDIR" "$WWWDIR/latest"
+
+if [ -d "$PATCHDIR" ]; then
+  cp -rp "$PATCHDIR" "$OUTPUTDIR"
+fi
+
+touch "$OUTPUTDIR/running"
+logprint "FileZilla 3 build log"
+logprint "---------------------\n"
+START=`date "+%Y-%m-%d %H:%M:%S"`
+
+logprint "Build started: $START\n"
+resetHosts || buildfailure || exit 1
+while getHost; do
+  for i in $TARGETS; do
+    mkdir -p "$OUTPUTDIR/$i"
+    touch "$OUTPUTDIR/$i/pending"
+  done
+done
+resetHosts
+
+mkdir -p "$WORKDIR" || buildfailure || exit 1
+clean_files
+
+if [ "$UPDATE" = "true" ]; then
+  updatecvs || buildfailure || exit 1
+fi
+
+logprint "Copying source"
+mkdir -p "$WORKDIR/source"
+rsync -av --delete --exclude .svn/ --exclude .git/ --chmod=o+r,Do+x "$CVSDIR/" "$WORKDIR/source/" || buildfailure || exit 1
+
+applypatches
+
+logprint "Generating configure files"
+resetPackages || buildfailure || exit 1
+while getPackage; do
+  PACKAGE=${PACKAGE#-}
+  cd "$WORKDIR/source/$PACKAGE"
+  if [ ! -e configure ]; then
+    echo "Running autoreconf -i for package $PACKAGE" >> $LOG
+    autoreconf -i >> $LOG 2>&1 || buildfailure || exit 1
+  fi
+done
+
+makedist || buildfailure || exit 1
+
+prebuild >> $LOG 2>&1 || buildfailure || exit 1
+
+packageClientscripts()
+{
+  cp -r "$CLIENTSCRIPTS" "$WORKDIR"
+  cp "$SCRIPTS/util.sh" "$WORKDIR/clientscripts/"
+  cp "$SCRIPTS/readpackages" "$WORKDIR/clientscripts/"
+  cp "$CONFDIR/packages" "$WORKDIR/clientscripts/"
+
+  cd "$WORKDIR"
+  tar -cjf "$WORKDIR/clientscripts.tar.bz2" --exclude='.svn' clientscripts
+}
+
+logprint "Packaging clientscripts"
+packageClientscripts
+
+echo "Preparation stage complete"
+echo "--------------------------"
+
+ID=1
+
+while getHost; do
+
+  echo Forking buildscript $ID
+  buildspawn $ID "$HOST" "$HOSTPREFIX" "$TARGETS" &
+
+  ID=$(($ID+1))
+
+done
+
+
+echo Waiting for clients
+wait 
+
+postbuild >> $LOG 2>&1
+
+logprint "Performing cleanup"
+clean_files
+
+$SCRIPTS/clean.sh >> $LOG 2>&1
+
+logprint "Completed"
+
+touch "$OUTPUTDIR/successful"
+rm "$OUTPUTDIR/running"

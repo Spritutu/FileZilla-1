@@ -1,0 +1,93 @@
+Octochess r5190 (2013-08-31)
+- Fix a bug in the transposition table leading to bogus entries
+- Do not report f1g1 castling move as ambiguous in Fischer Random Chess with king on f1, rook on g1.
+- CECP: Fix typo in detecting fischerrandom variant
+- Fix crash on startup if system's default locale is invalid
+
+Octochess r5178 (2013-08-25)
+- Full support for Fischer Random Chess, aka Chess960
+- KBPvPK endgame is handled better
+- Fixed too early move counter increment in search
+- Fix repetition draw detection after a null-move
+- Small improvements to the threading if searching with multiple cores.
+
+Octochess r5132 (2013-06-19)
+- Implemented Multi-PV analysis
+- In analysis mode, the moves to be searched can be specified
+- CECP: hint command is now supported, it returns best move from transposition table.
+- More accurate timekeeping
+- Handle KRPvKR endgame
+- Improve KPvK endgame
+- Adjust scores if stronger side is pawnless
+- Smaller book format
+- Fix handling of enpassant in hypothetical positions not reachable in a game from the start position
+- Fix scaling of scores in opposite-bishop endings
+- Fixed overflow in evaluation of king attack
+- Various code cleanup
+- Faster statistics calculation
+
+Octochess r4984 (2013-02-24):
+- Add support for ARM architecture to run Octochess on Kindle Touch
+- New threading implementation
+- Implement 50-move rule
+- Evaluation improvements
+- Implement pondering in UCI mode
+- Add support for commands to limit search depth
+- Fix rare bug in move generator
+- Implement mate-distance-pruning
+- Fixes to futility pruning
+- Fixes to LMR depth reduction
+- Handle KBPvKP endgame, improve KPvK
+- Various cleanup
+
+Octochess r4741 (2012-08-21):
+- Shiny new logo
+- Fix endgame evaluation of KvNBK with black being the strong side
+- Two problems with null move heuristic fixed
+- Increase max search depth from 40 to 60 plies
+- Additional sanity checks on positions entered through FEN strings, this fixes crashes on some invalid positions.
+- Fix incorrect wait times on Linux. This was causing calculation to stop up to one second too early, in particular affecting games with fixed move times
+- UCI: Take internal overhead into account when calculating the movetime deadline
+- CECP: Use proper move notation
+- CECP: Support the deprecated edit mode entered through the edit command
+- UCI: Mark opening positions for further processing if not in book
+- Code cleanup, move generic utility code into own subdirectory
+- Improve diagnostic output
+- Bookgen: Improve pgn parser
+- Bookgen: Fix stale transaction
+
+Octochess r4690 (2012-07-16):
+- Fix evaluation bug and use new eval values
+- Fix bug in static exchange evaluation leading to assumed king exchange
+- UCI: Fix black increment not being considered in time calculation
+- UCI: Handle movestogo argument to the go command
+- Fix crash in endgame evaluation
+- Fix bug in hash table replacement strategy due to truncation at high search depths
+- Use history based move ordering of noncaptures in search
+- CECP: Tell user an error if trying to use a POPCNT enabled Octochess on a CPU not supporting that instruction
+
+Octochess r4638 (2012-05-21):
+- UCI: Fix quit command not actually quitting
+- UCI: After returning bestmove after a go, the move is not actually applied
+- UCI: Implement support for the OwnBook option
+- UCI: Basic support for the movetime argument to the go command
+
+Octochess r4632 (2012-05-20):
+- CECP and UCI: Number of threads can be set
+- CECP and UCI: Size of transposition table can be set
+- CECP: Support fixed move time (st command)
+- Improved playing strength
+- Specialized endgame evaluation
+- Many small performance optimizations
+
+Octochess r4529 (2012-03-25):
+- Improved playing strength
+- Experimental UCI implementation
+- Many small bugs fixed
+- Add alternative popcount implemention for systems without POPCOUNT. Needs to be enabled through a #define
+- If compiled as 32bit program, clamp transposition table size to 1GB
+- Some code refactoring
+
+
+Octochess r4452 (2012-02-28)
+- Initial version
